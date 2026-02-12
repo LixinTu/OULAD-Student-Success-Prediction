@@ -1,4 +1,4 @@
-"""Model training module with time-aware split."""
+"""Model training module with backend-agnostic time-aware split."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
 
 from src.config import PipelineConfig
+from src.model.train_sklearn import train_sklearn
 
 FEATURE_COLS = [
     "weekly_score_mean",
@@ -24,9 +24,37 @@ FEATURE_COLS = [
 ]
 
 
+def _get_backend_trainer(backend: str):
+    if backend == "sklearn":
+        return train_sklearn
+    if backend == "pytorch":
+        try:
+            from src.model.train_torch import train_torch
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "MODEL_BACKEND=pytorch requires PyTorch. Install optional dependencies with: "
+                "pip install -r requirements-pt.txt"
+            ) from exc
+        return train_torch
+    if backend == "tensorflow":
+        try:
+            from src.model.train_tf import train_tf
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "MODEL_BACKEND=tensorflow requires TensorFlow. Install optional dependencies with: "
+                "pip install -r requirements-tf.txt"
+            ) from exc
+        return train_tf
+
+    raise ValueError(
+        f"Unsupported MODEL_BACKEND='{backend}'. "
+        "Valid options: ['pytorch', 'sklearn', 'tensorflow']"
+    )
+
+
 def train_model(
     features: pd.DataFrame, config: PipelineConfig
-) -> tuple[object, pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+) -> tuple[object, pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, dict]:
     model_df = features.dropna(subset=FEATURE_COLS + ["target_high_risk"]).copy()
 
     split_week = min(config.split_week, int(model_df["week"].max()))
@@ -40,17 +68,31 @@ def train_model(
     X_train, y_train = train_df[FEATURE_COLS], train_df["target_high_risk"]
     X_test, y_test = test_df[FEATURE_COLS], test_df["target_high_risk"]
 
-    model = LogisticRegression(max_iter=1000, random_state=config.random_seed)
-    model.fit(X_train, y_train)
+    trainer = _get_backend_trainer(config.model_backend)
+    try:
+        model, backend_params = trainer(X_train, y_train, config.random_seed, config.demo_mode)
+    except ImportError as exc:
+        if config.model_backend == "pytorch":
+            raise ImportError(
+                "PyTorch backend not available. Install with: pip install -r requirements-pt.txt"
+            ) from exc
+        if config.model_backend == "tensorflow":
+            raise ImportError(
+                "TensorFlow backend not available. Install with: pip install -r requirements-tf.txt"
+            ) from exc
+        raise
 
-    joblib.dump(model, config.models_dir / "risk_model.joblib")
+    if config.model_backend == "sklearn":
+        joblib.dump(model, config.models_dir / "risk_model.joblib")
+
     metadata = {
-        "model_type": "LogisticRegression",
+        "model_backend": config.model_backend,
         "feature_columns": FEATURE_COLS,
         "random_seed": config.random_seed,
         "split_week": split_week,
         "train_rows": len(train_df),
         "test_rows": len(test_df),
+        "backend_hyperparams": backend_params,
     }
     Path(config.models_dir / "model_metadata.json").write_text(json.dumps(metadata, indent=2))
-    return model, X_train, y_train, X_test, y_test
+    return model, X_train, y_train, X_test, y_test, metadata

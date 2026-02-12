@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+import subprocess
+from datetime import datetime, timezone
 
 from src.alerts.alert import generate_alert
 from src.config import ensure_directories, load_config
@@ -18,6 +19,7 @@ from src.model.evaluate import evaluate_model
 from src.model.explain import generate_shap_artifacts
 from src.model.predict import predict_latest_risk
 from src.model.train import train_model
+from src.storage import S3Storage
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -59,6 +61,112 @@ Generated on {datetime.utcnow().isoformat()}Z | Demo mode: {demo_mode}
     (config.reports_dir / "executive_summary.md").write_text(summary)
 
 
+def _build_run_id() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    try:
+        sha = (
+            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True)
+            .strip()
+            .lower()
+        )
+    except Exception:
+        sha = "nogit"
+    return f"{timestamp}-{sha}"
+
+
+def _build_s3_uri(bucket: str, prefix: str, key: str) -> str:
+    path = f"{prefix.strip('/')}/{key}".strip("/") if prefix else key
+    return f"s3://{bucket}/{path}"
+
+
+def _artifact_entries(config, run_id: str, storage_backend: str) -> list[dict[str, str | int]]:
+    patterns = [
+        "outputs/metrics_latest.json",
+        "outputs/shap_top_features.json",
+        "outputs/marts/*.csv",
+        "outputs/alerts/*.md",
+        "reports/*.md",
+        "reports/*.csv",
+    ]
+
+    entries: list[dict[str, str | int]] = []
+    for pattern in patterns:
+        for artifact_path in sorted(config.repo_root.glob(pattern)):
+            if not artifact_path.is_file():
+                continue
+            rel_path = artifact_path.relative_to(config.repo_root).as_posix()
+            key = f"runs/{run_id}/{rel_path}"
+            storage_uri = (
+                _build_s3_uri(config.s3_bucket, config.s3_prefix, key)
+                if storage_backend == "s3"
+                else f"local://{rel_path}"
+            )
+            entries.append(
+                {
+                    "local_path": rel_path,
+                    "size_bytes": artifact_path.stat().st_size,
+                    "storage_uri": storage_uri,
+                    "s3_key": key,
+                }
+            )
+    return entries
+
+
+def publish_artifacts_manifest(config, db_mode: str) -> None:
+    run_id = _build_run_id()
+    entries = _artifact_entries(config, run_id=run_id, storage_backend=config.storage_backend)
+
+    manifest = {
+        "run_id": run_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model_backend": config.model_backend,
+        "db_mode": db_mode,
+        "storage_backend": config.storage_backend,
+        "bucket": config.s3_bucket,
+        "prefix": config.s3_prefix,
+        "artifacts": entries,
+    }
+
+    manifest_path = config.outputs_dir / "artifacts_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    manifest_rel = manifest_path.relative_to(config.repo_root).as_posix()
+    manifest_key = f"runs/{run_id}/{manifest_rel}"
+    manifest_storage_uri = (
+        _build_s3_uri(config.s3_bucket, config.s3_prefix, manifest_key)
+        if config.storage_backend == "s3"
+        else f"local://{manifest_rel}"
+    )
+    manifest["artifacts"].append(
+        {
+            "local_path": manifest_rel,
+            "size_bytes": manifest_path.stat().st_size,
+            "storage_uri": manifest_storage_uri,
+            "s3_key": manifest_key,
+        }
+    )
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    if config.storage_backend != "s3":
+        return
+
+    storage = S3Storage(bucket=config.s3_bucket, region=config.aws_region, prefix=config.s3_prefix)
+    for item in entries:
+        storage.put_file(config.repo_root / str(item["local_path"]), str(item["s3_key"]))
+    storage.put_file(manifest_path, manifest_key, content_type="application/json")
+
+    logger.info(
+        json.dumps(
+            {
+                "event": "s3_artifacts_published",
+                "run_id": run_id,
+                "bucket": config.s3_bucket,
+                "artifact_count": len(entries) + 1,
+            }
+        )
+    )
+
+
 def run_pipeline(demo_mode: bool) -> None:
     config = load_config(demo_mode=demo_mode)
     ensure_directories(config)
@@ -72,9 +180,15 @@ def run_pipeline(demo_mode: bool) -> None:
     load_processed_data(clean_df, config, db)
 
     features = build_time_sliced_features(clean_df)
-    model, X_train, _, X_test, y_test = train_model(features, config)
-    metrics = evaluate_model(model, X_test, y_test, config)
-    top_features = generate_shap_artifacts(model, X_train, config)
+    model, X_train, y_train, X_test, y_test, model_metadata = train_model(features, config)
+    metrics = evaluate_model(
+        model,
+        X_test,
+        y_test,
+        config,
+        backend_hyperparams=model_metadata["backend_hyperparams"],
+    )
+    top_features = generate_shap_artifacts(model, X_train, y_train, config)
 
     latest_predictions = predict_latest_risk(
         model, features, config.current_week, config.high_risk_threshold
@@ -87,10 +201,18 @@ def run_pipeline(demo_mode: bool) -> None:
 
     roi_topline = roi_df.sort_values("roi", ascending=False).iloc[0].to_dict()
     write_executive_summary(metrics, roi_topline, demo_mode=demo_mode)
+    publish_artifacts_manifest(config, db_mode=db.driver)
 
     logger.info("Pipeline completed successfully")
     logger.info(
-        json.dumps({"metrics": metrics, "top_shap_features": top_features, "best_roi": roi_topline})
+        json.dumps(
+            {
+                "metrics": metrics,
+                "top_shap_features": top_features,
+                "best_roi": roi_topline,
+                "model_backend": config.model_backend,
+            }
+        )
     )
 
 

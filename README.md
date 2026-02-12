@@ -103,10 +103,9 @@ To avoid random leakage, the model is evaluated with time ordering:
 
 This approximates real operations where future student behavior must be predicted from historical data.
 
-## Explainability (SHAP)
-Generated artifacts:
-- `outputs/shap_top_features.json` (tracked text artifact)
-- `outputs/shap_summary.png` (generated at runtime, not tracked)
+## Explainability
+- **sklearn backend**: SHAP artifacts are generated (`outputs/shap_top_features.json`, `outputs/shap_summary.png`).
+- **pytorch/tensorflow backends**: permutation importance is generated and written to `outputs/shap_top_features.json` with the same JSON schema as sklearn.
 
 ## Alerting System
 Implemented alerts:
@@ -168,18 +167,33 @@ These same checks are wired into `.github/workflows/daily_pipeline.yml`.
 - `reports/executive_summary.md`
 
 ## Cloud Deployment Plan
-- **Storage** abstraction in `src/storage.py`: `LocalStorage` + `S3Storage` stub.
+- **Storage** abstraction in `src/storage.py`: `LocalStorage` + real `S3Storage` (boto3).
 - **Database**: Postgres by `DATABASE_URL`, SQLite fallback for local portability.
 - **Compute**: Dockerized app service (`docker/Dockerfile`, `docker-compose.yml`).
 - **Observability**: structured logs ready for CloudWatch-style ingestion.
 - **BI layer**: marts aligned for Power BI connectivity.
 
 ## How to Run
-### Local
+### Local (default sklearn backend)
 ```bash
 pip install -r requirements.txt
 python -m src.pipeline --demo
 ```
+
+### Optional Deep Learning Backends (PyTorch / TensorFlow)
+Sklearn remains the default baseline. PyTorch/TensorFlow are optional and only used when `MODEL_BACKEND` is set explicitly.
+
+```bash
+# PyTorch backend
+pip install -r requirements-pt.txt
+MODEL_BACKEND=pytorch python -m src.pipeline --demo
+
+# TensorFlow backend
+pip install -r requirements-tf.txt
+MODEL_BACKEND=tensorflow python -m src.pipeline --demo
+```
+
+PyTorch installation may vary by OS/CUDA; if needed, use the official PyTorch install command for your platform.
 
 ### Docker
 ```bash
@@ -192,6 +206,36 @@ docker compose up --build
 - `SPLIT_WEEK=7`
 - `HIGH_RISK_THRESHOLD=0.25`
 - `RISK_SPIKE_THRESHOLD_PCT=0.10`
+- `MODEL_BACKEND=sklearn|pytorch|tensorflow`
+- `STORAGE_BACKEND=local|s3`
+- `AWS_REGION=us-east-1`
+- `S3_BUCKET=<your-bucket>`
+- `S3_PREFIX=oulad-artifacts`
+
+### S3 Artifact Publishing
+Set these env vars: `STORAGE_BACKEND`, `AWS_REGION`, `S3_BUCKET`, `S3_PREFIX`.
+
+When `STORAGE_BACKEND=s3`, the pipeline uploads only small/stable artifacts:
+- `outputs/metrics_latest.json`
+- `outputs/shap_top_features.json`
+- `outputs/marts/*.csv`
+- `outputs/alerts/*.md`
+- `reports/*.md`
+- `reports/*.csv`
+- `outputs/artifacts_manifest.json`
+
+The manifest acts as run audit evidence (`run_id`, timestamp, model backend, db mode, file sizes, and storage URIs).
+
+Example:
+```bash
+export STORAGE_BACKEND=s3
+export AWS_REGION=us-east-1
+export S3_BUCKET=my-oulad-artifacts
+export S3_PREFIX=prod
+python -m src.pipeline --demo
+```
+
+> AWS credentials are intentionally not stored in this repo. Use IAM roles, AWS SSO, or a local AWS profile.
 
 ## CI/CD
 GitHub Actions (`.github/workflows/daily_pipeline.yml`) runs on push, nightly schedule, and manual dispatch. It performs compile/lint/test checks and runs the demo pipeline before uploading artifacts.

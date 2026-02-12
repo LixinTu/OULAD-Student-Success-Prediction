@@ -29,6 +29,11 @@ class PipelineConfig:
     value_per_pass: float
     default_intervention_cost: float
     demo_mode: bool
+    model_backend: str
+    storage_backend: str
+    aws_region: str
+    s3_bucket: str
+    s3_prefix: str
 
 
 def _env_float(name: str, default: float) -> float:
@@ -67,6 +72,11 @@ def load_config(demo_mode: bool | None = None) -> PipelineConfig:
         value_per_pass=_env_float("VALUE_PER_PASS", 1200.0),
         default_intervention_cost=_env_float("INTERVENTION_COST", 150.0),
         demo_mode=use_demo_mode,
+        model_backend=os.getenv("MODEL_BACKEND", "sklearn").strip().lower(),
+        storage_backend=os.getenv("STORAGE_BACKEND", "local").strip().lower(),
+        aws_region=os.getenv("AWS_REGION", "us-east-1"),
+        s3_bucket=os.getenv("S3_BUCKET", "").strip(),
+        s3_prefix=os.getenv("S3_PREFIX", "").strip("/"),
     )
 
 
