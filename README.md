@@ -1,4 +1,40 @@
-# OULAD Student Success Platform (Flagship v2)
+# OULAD Student Success Analytics Platform (Flagship v2)
+
+🚀 A cloud-ready, production-style analytics platform that transforms exploratory notebook work into a modular, CI-validated, containerized student retention system.
+
+This repository demonstrates:
+
+- End-to-end ETL → Time-aware ML → SHAP explainability
+- Postgres-backed BI marts
+- Threshold & spike alerting
+- Offline A/B experiment simulation
+- ROI sensitivity modeling
+- Dockerized execution + CI quality gates
+
+The original exploratory notebook is preserved: `oulad-student-success-prediction.ipynb`.
+
+---
+
+## ⭐ What Makes This Different
+
+Unlike typical ML portfolio projects, this repository:
+
+- Separates exploration from production-grade code
+- Implements time-based validation to prevent data leakage
+- Publishes BI-ready database marts
+- Includes alerting and experiment planning
+- Enforces formatting, linting, and CI gates
+- Supports containerized and cloud-ready deployment
+
+---
+
+## ⚡ 2-Minute Reviewer Overview
+
+One command runs the full workflow:
+
+ETL → Feature Engineering → Time-aware Model → SHAP → BI Marts → Alerts → A/B Simulation → ROI → Executive Summary
+
+Demo mode ensures reproducibility even without raw OULAD data.
 
 ## Executive Overview
 This repository presents a **production-style student retention analytics platform** built from the OULAD domain. It transforms exploratory notebook work into a modular pipeline with reproducible execution, database-backed marts, alerting, experimentation, and executive reporting.
