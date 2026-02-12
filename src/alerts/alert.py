@@ -1,4 +1,5 @@
 """Alerting logic: threshold and trend spike detection."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,12 +7,17 @@ from datetime import datetime
 import pandas as pd
 
 from src.config import PipelineConfig
+from src.etl.load import DBClient
 
 
-def generate_alert(latest_predictions: pd.DataFrame, features: pd.DataFrame, config: PipelineConfig) -> str:
+def generate_alert(
+    latest_predictions: pd.DataFrame, features: pd.DataFrame, config: PipelineConfig, db: DBClient
+) -> str:
     high_risk_rate = latest_predictions["high_risk_flag"].mean()
 
-    week_mean = features.groupby("week", as_index=False)["dropout_risk_target"].mean().sort_values("week")
+    week_mean = (
+        features.groupby("week", as_index=False)["dropout_risk_target"].mean().sort_values("week")
+    )
     if len(week_mean) >= 2:
         prior = week_mean.iloc[-2]["dropout_risk_target"]
         current = week_mean.iloc[-1]["dropout_risk_target"]
@@ -24,14 +30,17 @@ def generate_alert(latest_predictions: pd.DataFrame, features: pd.DataFrame, con
     top_10 = latest_predictions.head(10)["id_student"].astype(str).tolist()
 
     trigger_lines = []
+    alert_type = "none"
     if threshold_triggered:
         trigger_lines.append(
             f"- Threshold alert: high-risk rate {high_risk_rate:.2%} > configured {config.high_risk_threshold:.2%}."
         )
+        alert_type = "threshold"
     if spike_triggered:
         trigger_lines.append(
             f"- Spike alert: mean risk increased {spike_pct:.2%} WoW > configured {config.spike_threshold_pct:.2%}."
         )
+        alert_type = "spike" if alert_type == "none" else "threshold_and_spike"
     if not trigger_lines:
         trigger_lines.append("- No alert triggered; metrics remain within configured limits.")
 
@@ -58,4 +67,19 @@ Generated: {datetime.utcnow().isoformat()}Z
 """
     out_path = config.alerts_dir / "alert_latest.md"
     out_path.write_text(body)
+
+    db.execute(
+        (
+            "INSERT INTO alert_log (run_ts, alert_type, high_risk_rate, spike_pct, message) VALUES (?, ?, ?, ?, ?)"
+            if db.driver == "sqlite"
+            else "INSERT INTO alert_log (run_ts, alert_type, high_risk_rate, spike_pct, message) VALUES (%s, %s, %s, %s, %s)"
+        ),
+        (
+            datetime.utcnow().isoformat(),
+            alert_type,
+            float(high_risk_rate),
+            float(spike_pct),
+            " | ".join(trigger_lines),
+        ),
+    )
     return body

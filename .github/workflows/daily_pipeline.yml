@@ -1,6 +1,7 @@
-name: Daily OULAD Demo Pipeline
+name: OULAD Pipeline CI
 
 on:
+  push:
   schedule:
     - cron: '0 8 * * *'
   workflow_dispatch:
@@ -21,14 +22,31 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Compile check
+        run: python -m compileall src
+
+      - name: Lint check
+        run: |
+          ruff check src tests
+          black --check src tests
+
+      - name: Run tests
+        env:
+          PIPELINE_DEMO_MODE: "true"
+        run: pytest -q
 
       - name: Run pipeline in demo mode
-        run: bash run_pipeline.sh
+        env:
+          PIPELINE_DEMO_MODE: "true"
+        run: python -m src.pipeline --demo
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-outputs
+          name: pipeline-artifacts
           path: |
             outputs/**
             reports/**
+            models/**

@@ -1,7 +1,8 @@
--- Core schema reference for analytics pipeline
-CREATE TABLE IF NOT EXISTS student_risk_latest (
-    id_student INTEGER,
-    code_module TEXT,
+-- Core schema for production-style analytics marts and logs
+CREATE TABLE IF NOT EXISTS student_risk_daily (
+    run_date DATE,
+    id_student BIGINT,
+    code_module VARCHAR(16),
     week INTEGER,
     risk_score DOUBLE PRECISION,
     high_risk_flag INTEGER,
@@ -9,9 +10,29 @@ CREATE TABLE IF NOT EXISTS student_risk_latest (
     cum_submissions DOUBLE PRECISION
 );
 
-CREATE TABLE IF NOT EXISTS course_summary_latest (
-    code_module TEXT,
+CREATE TABLE IF NOT EXISTS course_summary_daily (
+    run_date DATE,
+    code_module VARCHAR(16),
     student_count INTEGER,
     avg_risk_score DOUBLE PRECISION,
     high_risk_rate DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS experiment_results (
+    run_ts TIMESTAMP,
+    uplift_scenario DOUBLE PRECISION,
+    control_rate DOUBLE PRECISION,
+    treatment_rate DOUBLE PRECISION,
+    rate_diff DOUBLE PRECISION,
+    p_value DOUBLE PRECISION,
+    ci_low DOUBLE PRECISION,
+    ci_high DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS alert_log (
+    run_ts TIMESTAMP,
+    alert_type VARCHAR(64),
+    high_risk_rate DOUBLE PRECISION,
+    spike_pct DOUBLE PRECISION,
+    message TEXT
 );

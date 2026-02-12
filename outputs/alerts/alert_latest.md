@@ -1,18 +1,18 @@
 # Student Risk Alert Report
 
-Generated: 2026-02-11T23:10:04.890891Z
+Generated: 2026-02-11T23:34:15.045829Z
 
 ## Trigger Summary
-- Threshold alert: high-risk rate 58.00% > configured 25.00%.
+- Threshold alert: high-risk rate 62.33% > configured 25.00%.
 
 ## Summary Stats
-- Current high-risk rate: **58.00%**
+- Current high-risk rate: **62.33%**
 - Week-over-week risk change: **1.75%**
 - Current week modeled students: **300**
 
 ## Top 10 At-Risk Student IDs
-- 10091
 - 10215
+- 10091
 - 10025
 - 10130
 - 10046

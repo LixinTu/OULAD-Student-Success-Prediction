@@ -1,13 +1,16 @@
 """Offline A/B simulation and ROI sensitivity analysis."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
 from src.config import PipelineConfig
+from src.etl.load import DBClient
 
 
 @dataclass
@@ -21,7 +24,9 @@ class ABResult:
     ci_high: float
 
 
-def _bootstrap_ci(control: np.ndarray, treatment: np.ndarray, n_boot: int = 500, seed: int = 42) -> tuple[float, float]:
+def _bootstrap_ci(
+    control: np.ndarray, treatment: np.ndarray, seed: int, n_boot: int = 2000
+) -> tuple[float, float]:
     rng = np.random.default_rng(seed)
     diffs = []
     for _ in range(n_boot):
@@ -40,7 +45,9 @@ def _two_prop_p(control_success: int, control_n: int, treat_success: int, treat_
     return float(2 * (1 - norm.cdf(abs(z))))
 
 
-def run_ab_simulation(latest_predictions: pd.DataFrame, config: PipelineConfig) -> tuple[pd.DataFrame, str, pd.DataFrame]:
+def run_ab_simulation(
+    latest_predictions: pd.DataFrame, config: PipelineConfig, db: DBClient
+) -> tuple[pd.DataFrame, str, pd.DataFrame]:
     top = latest_predictions.head(config.top_k_at_risk).copy()
     rng = np.random.default_rng(config.random_seed)
     top["group"] = np.where(rng.random(len(top)) < 0.5, "control", "treatment")
@@ -65,13 +72,7 @@ def run_ab_simulation(latest_predictions: pd.DataFrame, config: PipelineConfig) 
         p_val = _two_prop_p(int(control.sum()), len(control), int(treat.sum()), len(treat))
         results.append(
             ABResult(
-                uplift=uplift,
-                control_rate=float(c_rate),
-                treatment_rate=float(t_rate),
-                diff=float(t_rate - c_rate),
-                p_value=p_val,
-                ci_low=ci_low,
-                ci_high=ci_high,
+                uplift, float(c_rate), float(t_rate), float(t_rate - c_rate), p_val, ci_low, ci_high
             )
         )
 
@@ -113,4 +114,21 @@ def run_ab_simulation(latest_predictions: pd.DataFrame, config: PipelineConfig) 
             )
     roi_df = pd.DataFrame(grid_rows)
     roi_df.to_csv(config.reports_dir / "roi_sensitivity.csv", index=False)
+
+    experiment_rows = pd.DataFrame(
+        [
+            {
+                "run_ts": datetime.utcnow().isoformat(),
+                "uplift_scenario": r.uplift,
+                "control_rate": r.control_rate,
+                "treatment_rate": r.treatment_rate,
+                "rate_diff": r.diff,
+                "p_value": r.p_value,
+                "ci_low": r.ci_low,
+                "ci_high": r.ci_high,
+            }
+            for r in results
+        ]
+    )
+    db.insert_df("experiment_results", experiment_rows)
     return assignment_df, report, roi_df
