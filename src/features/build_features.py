@@ -1,4 +1,5 @@
 """Feature engineering with weekly time slicing."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -18,16 +19,15 @@ def build_time_sliced_features(clean_df: pd.DataFrame) -> pd.DataFrame:
     )
 
     grouped["cum_submissions"] = grouped.groupby("id_student")["weekly_submissions"].cumsum()
-    grouped["rolling_score_3w"] = (
-        grouped.groupby("id_student")["weekly_score_mean"]
-        .transform(lambda s: s.rolling(3, min_periods=1).mean())
+    grouped["rolling_score_3w"] = grouped.groupby("id_student")["weekly_score_mean"].transform(
+        lambda s: s.rolling(3, min_periods=1).mean()
     )
-    grouped["score_trend_2w"] = (
-        grouped.groupby("id_student")["weekly_score_mean"].diff().fillna(0)
-    )
+    grouped["score_trend_2w"] = grouped.groupby("id_student")["weekly_score_mean"].diff().fillna(0)
 
     score_factor = 1 - (grouped["rolling_score_3w"] / 100)
-    submit_factor = np.clip(1 - grouped["cum_submissions"] / (grouped["week"].clip(lower=1) * 1.5), 0, 1)
+    submit_factor = np.clip(
+        1 - grouped["cum_submissions"] / (grouped["week"].clip(lower=1) * 1.5), 0, 1
+    )
     grouped["dropout_risk_target"] = (
         0.6 * score_factor
         + 0.2 * submit_factor

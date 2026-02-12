@@ -1,4 +1,5 @@
 """Model evaluation utilities."""
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,9 @@ def evaluate_model(model: object, X_test, y_test, config: PipelineConfig) -> dic
     metrics = {
         "auc": float(roc_auc_score(y_test, probs)),
         "pr_auc": float(auc(recall, precision)),
-        "precision_at_0_5": float(np.sum((preds == 1) & (y_test == 1)) / max(np.sum(preds == 1), 1)),
+        "precision_at_0_5": float(
+            np.sum((preds == 1) & (y_test == 1)) / max(np.sum(preds == 1), 1)
+        ),
         "recall_at_0_5": float(np.sum((preds == 1) & (y_test == 1)) / max(np.sum(y_test == 1), 1)),
         "confusion_matrix": confusion_matrix(y_test, preds).tolist(),
     }

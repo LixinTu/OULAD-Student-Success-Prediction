@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: oulad-postgres
+    environment:
+      POSTGRES_USER: oulad
+      POSTGRES_PASSWORD: oulad
+      POSTGRES_DB: oulad_analytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: oulad-app
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql+psycopg2://oulad:oulad@postgres:5432/oulad_analytics
+      PIPELINE_DEMO_MODE: "true"
+      HIGH_RISK_THRESHOLD: "0.25"
+      RISK_SPIKE_THRESHOLD_PCT: "0.10"
+      CURRENT_WEEK: "10"
+      SPLIT_WEEK: "7"
+    volumes:
+      - ./:/app
+    command: ["python", "-m", "src.pipeline", "--demo"]
+
+volumes:
+  pgdata:

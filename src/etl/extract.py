@@ -1,4 +1,5 @@
 """Extract layer for OULAD raw data with demo fallback."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -72,8 +73,7 @@ def extract_data(config: PipelineConfig) -> tuple[pd.DataFrame, pd.DataFrame, pd
         logger.warning(msg)
         if not config.demo_mode:
             raise FileNotFoundError(
-                msg
-                + " Set PIPELINE_DEMO_MODE=true or place files in data/raw with expected names."
+                msg + " Set PIPELINE_DEMO_MODE=true or place files in data/raw with expected names."
             )
         return _generate_demo_data(config)
 

@@ -28,7 +28,6 @@ env/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb
 
 # Data files
 *.csv
@@ -37,6 +36,13 @@ env/
 data/
 *.pkl
 *.joblib
+
+# Binary artifacts
+*.png
+*.pdf
+*.gz
+*.parquet
+*.pyc
 
 # IDE
 .vscode/
@@ -58,8 +64,13 @@ models/
 *.log
 logs/
 
-# Keep lightweight demo artifacts for portfolio review
+# Keep lightweight text demo artifacts for portfolio review
 !outputs/marts/student_risk_latest.csv
 !outputs/marts/course_summary_latest.csv
 !reports/roi_sensitivity.csv
 !outputs/experiments/assignment_latest.csv
+!outputs/metrics_latest.json
+!outputs/shap_top_features.json
+!outputs/alerts/alert_latest.md
+!reports/ab_test_report.md
+!reports/executive_summary.md
