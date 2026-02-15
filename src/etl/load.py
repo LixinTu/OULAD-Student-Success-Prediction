@@ -30,7 +30,7 @@ class DBClient:
             df.to_sql(table_name, self.conn, if_exists="append", index=False)
             return
         cols = list(df.columns)
-        values = [tuple(x) for x in df.to_numpy()]
+        values = [tuple(x) for x in df.itertuples(index=False, name=None)]
         placeholders = ", ".join(["%s"] * len(cols))
         col_names = ", ".join(cols)
         query = f"INSERT INTO {table_name} ({col_names}) VALUES ({placeholders})"
@@ -41,16 +41,14 @@ class DBClient:
 
 def get_database_client(config: PipelineConfig) -> DBClient:
     if config.database_url:
-        try:
-            import psycopg2
+        import psycopg2
 
-            conn = psycopg2.connect(config.database_url)
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            logger.info("Connected to Postgres database")
-            return DBClient(conn=conn, driver="postgres")
-        except Exception as exc:  # pragma: no cover
-            logger.warning("Postgres unavailable (%s). Falling back to SQLite.", exc)
+        normalized_url = config.database_url.replace("postgresql+psycopg2://", "postgresql://")
+        conn = psycopg2.connect(normalized_url)
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        logger.info("Connected to Postgres database")
+        return DBClient(conn=conn, driver="postgres")
 
     conn = sqlite3.connect(config.db_path)
     logger.info("Using SQLite fallback at %s", config.db_path)

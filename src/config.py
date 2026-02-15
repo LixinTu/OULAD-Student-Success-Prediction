@@ -20,6 +20,7 @@ class PipelineConfig:
     models_dir: Path
     db_path: Path
     database_url: str | None
+    db_mode: str
     random_seed: int
     high_risk_threshold: float
     spike_threshold_pct: float
@@ -51,6 +52,7 @@ def load_config(demo_mode: bool | None = None) -> PipelineConfig:
         if demo_mode is None
         else demo_mode
     )
+    database_url = os.getenv("DATABASE_URL")
     return PipelineConfig(
         repo_root=root,
         data_raw_dir=root / "data" / "raw",
@@ -62,7 +64,8 @@ def load_config(demo_mode: bool | None = None) -> PipelineConfig:
         reports_dir=root / "reports",
         models_dir=root / "models",
         db_path=root / "data" / "processed" / "pipeline.db",
-        database_url=os.getenv("DATABASE_URL"),
+        database_url=database_url,
+        db_mode="postgres" if database_url else "sqlite",
         random_seed=_env_int("PIPELINE_RANDOM_SEED", 42),
         high_risk_threshold=_env_float("HIGH_RISK_THRESHOLD", 0.25),
         spike_threshold_pct=_env_float("RISK_SPIKE_THRESHOLD_PCT", 0.10),

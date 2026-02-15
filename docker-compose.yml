@@ -10,6 +10,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oulad -d oulad_analytics"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   app:
     build:
@@ -19,7 +24,7 @@ services:
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: postgresql+psycopg2://oulad:oulad@postgres:5432/oulad_analytics
+      DATABASE_URL: postgresql://oulad:oulad@postgres:5432/oulad_analytics
       PIPELINE_DEMO_MODE: "true"
       HIGH_RISK_THRESHOLD: "0.25"
       RISK_SPIKE_THRESHOLD_PCT: "0.10"

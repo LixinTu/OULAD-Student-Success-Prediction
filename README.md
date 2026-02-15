@@ -174,11 +174,34 @@ These same checks are wired into `.github/workflows/daily_pipeline.yml`.
 - **BI layer**: marts aligned for Power BI connectivity.
 
 ## How to Run
-### Local (default sklearn backend)
+### Postgres-backed demo flow (recommended)
+1) Start Postgres:
+```bash
+docker compose up -d postgres
+```
+
+2) Install dependencies:
 ```bash
 pip install -r requirements.txt
-python -m src.pipeline --demo
 ```
+
+3) Point the pipeline to Postgres (pipeline falls back to SQLite only when `DATABASE_URL` is unset):
+```bash
+export DATABASE_URL=postgresql://oulad:oulad@localhost:5432/oulad_analytics
+```
+
+4) Run the full demo pipeline and publish marts:
+```bash
+make run
+```
+
+5) Verify tables and row counts:
+```bash
+make verify-postgres
+```
+
+### Local SQLite fallback
+If `DATABASE_URL` is not set, the same `make run` command writes to local SQLite at `data/processed/pipeline.db`.
 
 ### Optional Deep Learning Backends (PyTorch / TensorFlow)
 Sklearn remains the default baseline. PyTorch/TensorFlow are optional and only used when `MODEL_BACKEND` is set explicitly.
@@ -195,11 +218,6 @@ MODEL_BACKEND=tensorflow python -m src.pipeline --demo
 
 PyTorch installation may vary by OS/CUDA; if needed, use the official PyTorch install command for your platform.
 
-### Docker
-```bash
-docker compose up --build
-```
-
 ### Optional environment variables
 - `DATABASE_URL`
 - `PIPELINE_DEMO_MODE=true|false`
@@ -211,6 +229,19 @@ docker compose up --build
 - `AWS_REGION=us-east-1`
 - `S3_BUCKET=<your-bucket>`
 - `S3_PREFIX=oulad-artifacts`
+
+## Power BI: Connect to Postgres
+1) In Power BI Desktop, select **Get Data** → **PostgreSQL database**.
+2) Server: `localhost`.
+3) Database: `oulad_analytics`.
+4) Credentials: username `oulad`, password `oulad`.
+5) Choose **Import** mode for quickest demo setup.
+6) Select these tables:
+   - `student_risk_daily`
+   - `course_summary_daily`
+   - `experiment_results`
+   - `alert_log`
+7) Click **Load** and build visuals (examples: risk trend by `run_date`, module heatmap by `high_risk_rate`, alert timeline by `run_ts`).
 
 ### S3 Artifact Publishing
 Set these env vars: `STORAGE_BACKEND`, `AWS_REGION`, `S3_BUCKET`, `S3_PREFIX`.
