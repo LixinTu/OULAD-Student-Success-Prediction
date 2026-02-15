@@ -13,8 +13,13 @@ def transform_data(
     merged = student_assessment.merge(assessments, on="id_assessment", how="left")
     merged = merged.merge(student_info, on="id_student", how="left")
 
-    merged["week"] = (merged["date_submitted"].fillna(merged["date"]).fillna(0) // 7).astype(int)
-    merged["score"] = merged["score"].fillna(0.0)
+    merged["week"] = (
+        merged["date_submitted"].fillna(merged["date"]).fillna(0) // 7
+    ).astype(int)
+
+    # ✅ FIX: Ensure score is numeric (raw OULAD can load it as strings like "78")
+    merged["score"] = pd.to_numeric(merged["score"], errors="coerce").fillna(0.0)
+
     merged["submitted"] = merged.get("submitted", 1)
     merged["submitted"] = merged["submitted"].fillna(1).astype(int)
 
