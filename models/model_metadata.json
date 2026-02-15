@@ -1,0 +1,23 @@
+{
+  "model_backend": "sklearn",
+  "feature_columns": [
+    "weekly_score_mean",
+    "weekly_submissions",
+    "studied_credits",
+    "age_band_num",
+    "imd_band_num",
+    "disability_flag",
+    "cum_submissions",
+    "rolling_score_3w",
+    "score_trend_2w"
+  ],
+  "random_seed": 42,
+  "split_week": 7,
+  "train_rows": 35334,
+  "test_rows": 113306,
+  "backend_hyperparams": {
+    "model_type": "LogisticRegression",
+    "max_iter": 1000,
+    "random_seed": 42
+  }
+}
