@@ -1,74 +1,57 @@
-# Implementation Plan: Full-History Weekly Marts
+# Route B Industrialization Plan (Discovery-First)
 
-## Objective
-Refactor the pipeline to produce full historical weekly marts (weeks 0..max_week) instead of single-week snapshots, while preserving optional snapshot behavior for alerts and experiments.
+## Step 0 Discovery Findings
 
-## Files to edit and planned changes
+Repository scan command used:
 
-### 1) `src/config.py`
-- Make `CURRENT_WEEK` optional (`int | None`) instead of required int.
-- Add helper parser for optional int env vars.
-- Default `CURRENT_WEEK` to `None` when unset/empty.
-- Keep `PIPELINE_DEMO_MODE` behavior unchanged.
+```bash
+rg -n "risk_score|high_risk|student_risk|alert_log|course_summary|experiment_results|CREATE TABLE|to_sql|copy_expert|insert into|write_|load_" src db tests README.md Makefile
+```
 
-### 2) `src/model/predict.py`
-- Replace single-week prediction path with full-history prediction function over all rows.
-- Add helper to derive a latest-week snapshot from full-history predictions:
-  - If `CURRENT_WEEK` override is set, use that week when present.
-  - Otherwise, resolve latest week as `max(features.week)`.
-  - Fallback safely to max week if override is missing in data.
-- Ensure predictions retain `week`, `id_student`, `code_module`, and feature columns needed by marts.
+### A) Current risk-score storage tables (name + schema)
 
-### 3) `src/marts/build_marts.py`
-- Build `student_risk_daily` from full-history predictions (all weeks) with `run_date`.
-- Build `course_summary_daily` grouped by `(run_date, week, code_module)`.
-- Preserve existing columns, adding `week` to course summary.
-- Continue writing CSV samples and inserting into DB.
+1. **`student_risk_daily`** (currently unqualified, therefore `public.student_risk_daily` in Postgres):
+   - Defined in `db/schema.sql`.
+   - Written from `src/marts/build_marts.py::build_marts` via `db.insert_df("student_risk_daily", student_risk_daily)`.
 
-### 4) `db/schema.sql`
-- Add `week` column to `course_summary_daily` table schema for weekly trend aggregations.
-- Keep existing columns for backward compatibility.
+2. **File output used by tests/docs**:
+   - `outputs/marts/student_risk_daily_sample.csv` written in `src/marts/build_marts.py::build_marts`.
 
-### 5) `src/pipeline.py`
-- Use full-history prediction dataframe for marts.
-- Compute latest-week snapshot from full-history predictions for:
-  - alerts,
-  - experiments/ROI,
-  - optional `predictions_latest.csv` output.
-- Ensure data flow:
-  `extract -> transform -> features(all weeks) -> train(time split) -> predict(all weeks) -> marts(full history)`
-  and separately snapshot for alert/experiment consumers.
+### B) Current risk-score columns observed
 
-### 6) `src/alerts/alert.py`
-- Keep alert calculations on latest week snapshot input.
-- Update function signature naming/doc intent to clarify snapshot use.
-- Keep week-over-week logic based on full feature history.
+From `db/schema.sql` + `src/marts/build_marts.py`:
 
-### 7) `tests/test_pipeline_smoke.py`
-- Extend smoke test assertions to verify multi-week marts:
-  - `count(distinct week) > 1` in generated `student_risk_daily_sample.csv`.
-  - `course_summary_daily_sample.csv` includes `week` and multiple distinct weeks.
+- `run_date`
+- `id_student`
+- `code_module`
+- `week`
+- `risk_score`
+- `high_risk_flag`
+- `weekly_score_mean`
+- `cum_submissions`
 
-### 8) `README.md`
-- Update runbook and verification section with required SQL:
-  - `select min(week), max(week), count(distinct week) from student_risk_daily;`
-  - `select week, count(*) from student_risk_daily group by week order by week limit 20;`
-- Add course summary min/max week checks and row-count checks.
-- Clarify that marts are full-history time series while alerts/experiments may use latest-week snapshot.
+### C) Where course summaries / alerts / experiments are written
 
-### 9) `dashboards/powerbi_refresh_guide.md`
-- Update Power BI guidance to use weekly trend visuals across `week` and `run_date` from full-history marts.
+1. **Course summary**:
+   - Table: `course_summary_daily` (`public.course_summary_daily` in Postgres).
+   - Built and inserted in `src/marts/build_marts.py::build_marts`.
+   - CSV: `outputs/marts/course_summary_daily_sample.csv`.
 
-## Data flow after refactor
-1. Build features for every `(id_student, code_module, week)`.
-2. Train/evaluate with week-based split (`SPLIT_WEEK`) on full feature history.
-3. Score all weekly rows to produce historical risk predictions.
-4. Persist full-history marts with `run_date` + `week` granularity.
-5. Derive latest-week snapshot only for alerting and top-K experiment simulation.
+2. **Alerts**:
+   - Table: `alert_log` (`public.alert_log`).
+   - Insert SQL in `src/alerts/alert.py::generate_alert`.
+   - Markdown artifact: `outputs/alerts/alert_latest.md`.
 
-## Validation approach
-- Run test suite (`pytest` smoke tests).
-- Run pipeline locally in demo mode.
-- Verify artifacts contain multiple weeks.
-- Verify required SQL works against sqlite/postgres schema.
+3. **Experiment rows**:
+   - Table: `experiment_results` (`public.experiment_results`).
+   - Written in `src/experiments/ab_simulation.py::run_ab_simulation` with `db.insert_df("experiment_results", experiment_rows)`.
+   - CSV/report artifacts: `outputs/experiments/assignment_latest.csv`, `reports/ab_test_report.md`, `reports/roi_sensitivity.csv`.
 
+### D) Compatibility notes for migration to Route B
+
+- Keep existing writes to legacy `public.student_risk_daily`, `public.course_summary_daily`, `public.alert_log`, and `public.experiment_results` to avoid breaking current consumers.
+- Add schema-separated writes in parallel:
+  - `ml.student_risk_scores` for model scoring history.
+  - dbt-managed marts in `mart.*`.
+- Do **not** infer legacy table names; discovery above is source of truth for compatibility.
+- `DATABASE_URL` behavior should remain strict: when set, Postgres must be used and connection errors should fail loudly.

@@ -59,6 +59,18 @@ def initialize_schema(config: PipelineConfig, db: DBClient) -> None:
     schema_sql = (config.repo_root / "db" / "schema.sql").read_text()
     statements = [stmt.strip() for stmt in schema_sql.split(";") if stmt.strip()]
     for stmt in statements:
+        normalized = stmt.lower()
+        if db.driver == "sqlite":
+            if normalized.startswith("--"):
+                parts = [line for line in stmt.splitlines() if not line.strip().startswith("--")]
+                stmt = "\n".join(parts).strip()
+                normalized = stmt.lower()
+                if not stmt:
+                    continue
+            if normalized.startswith("create schema"):
+                continue
+            if "create table if not exists ml.student_risk_scores" in normalized:
+                continue
         db.execute(stmt)
 
     if db.driver == "sqlite":

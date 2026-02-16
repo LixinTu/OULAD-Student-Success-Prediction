@@ -1,0 +1,52 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: student_info
+      - name: student_assessment
+      - name: assessments
+      - name: student_vle
+      - name: vle
+      - name: courses
+      - name: student_registration
+
+  - name: ml
+    schema: ml
+    tables:
+      - name: student_risk_scores
+
+models:
+  - name: stg_student_info
+    columns:
+      - name: id_student
+        tests: [not_null]
+      - name: code_module
+        tests: [not_null]
+
+  - name: stg_student_assessment
+    columns:
+      - name: id_student
+        tests: [not_null]
+      - name: id_assessment
+        tests: [not_null]
+
+  - name: stg_assessments
+    columns:
+      - name: id_assessment
+        tests: [not_null, unique]
+
+  - name: mart_student_risk_weekly
+    columns:
+      - name: run_date
+        tests: [not_null]
+      - name: risk_score
+        tests: [not_null]
+
+  - name: mart_course_summary_weekly
+    columns:
+      - name: run_date
+        tests: [not_null]
+      - name: code_module
+        tests: [not_null]

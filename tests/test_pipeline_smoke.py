@@ -31,6 +31,8 @@ def test_demo_pipeline_smoke(monkeypatch: pytest.MonkeyPatch, backend: str) -> N
 
     student_risk = pd.read_csv("outputs/marts/student_risk_daily_sample.csv")
     assert student_risk["week"].nunique() > 1
+    assert pd.api.types.is_numeric_dtype(student_risk["risk_score"])
+    assert student_risk["risk_score"].notna().any()
 
     course_summary = pd.read_csv("outputs/marts/course_summary_daily_sample.csv")
     assert "week" in course_summary.columns

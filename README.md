@@ -312,3 +312,98 @@ Makefile
 - Replace offline simulation with live randomized intervention experiments.
 - Add model drift monitoring, retraining cadence, and model registry.
 - Extend security controls (RLS/IAM) and data contracts for enterprise rollout.
+
+## Quickstart (Postgres + dbt + Power BI)
+
+### Prerequisites
+- Docker Desktop
+- Python 3.10+ virtual environment
+- `dbt-postgres`
+- Power BI Desktop
+
+### 1) Start Postgres
+```bash
+docker compose up -d postgres
+```
+
+### 2) Install dependencies
+```bash
+pip install -r requirements.txt
+pip install dbt-postgres
+```
+
+### 3) Set `DATABASE_URL`
+
+**macOS/Linux**
+```bash
+export DATABASE_URL=postgresql://oulad:oulad@localhost:5432/oulad_analytics
+```
+
+**Windows PowerShell**
+```powershell
+$env:DATABASE_URL = "postgresql://oulad:oulad@localhost:5432/oulad_analytics"
+```
+
+**Windows CMD**
+```cmd
+set DATABASE_URL=postgresql://oulad:oulad@localhost:5432/oulad_analytics
+```
+
+### 4) Ingest raw CSVs to `raw.*`
+```bash
+python scripts/ingest_raw_postgres.py
+```
+
+### 5) Run Python ML pipeline (writes `ml.student_risk_scores` + backward-compatible legacy tables)
+```bash
+python -m src.pipeline
+```
+
+Demo mode remains available when needed:
+```bash
+python -m src.pipeline --demo
+```
+
+### 6) Build marts with dbt
+```bash
+cd dbt_oulad
+dbt run
+dbt test
+```
+
+### 7) Power BI connection
+- Connector: **PostgreSQL database**
+- Server: `localhost`
+- Port: `5432`
+- Database: `oulad_analytics`
+- Username: `oulad`
+- Password: `oulad`
+
+Load only mart tables:
+- `mart.mart_student_risk_weekly`
+- `mart.mart_course_summary_weekly`
+
+Optional metrics table:
+- `ml.student_risk_scores`
+
+If Power BI prompts for encryption on local Docker Postgres, choose **unencrypted connection** for local development.
+
+### Makefile helpers
+```bash
+make postgres-up
+make ingest-raw
+make pipeline-ml
+make dbt-run
+make dbt-test
+make verify-postgres
+```
+
+### Windows fallback (if `make` is unavailable)
+```powershell
+docker compose up -d postgres
+python scripts/ingest_raw_postgres.py
+python -m src.pipeline
+cd dbt_oulad
+ dbt run
+ dbt test
+```

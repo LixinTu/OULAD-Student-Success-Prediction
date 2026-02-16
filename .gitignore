@@ -74,3 +74,7 @@ logs/
 !outputs/alerts/alert_latest.md
 !reports/ab_test_report.md
 !reports/executive_summary.md
+
+# Allow dbt models despite global models/ ignore
+!dbt_oulad/models/
+!dbt_oulad/models/**

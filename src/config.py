@@ -58,7 +58,7 @@ def _env_optional_int(name: str) -> int | None:
 def load_config(demo_mode: bool | None = None) -> PipelineConfig:
     root = Path(__file__).resolve().parents[1]
     use_demo_mode = (
-        str(os.getenv("PIPELINE_DEMO_MODE", "true")).lower() == "true"
+        str(os.getenv("PIPELINE_DEMO_MODE", "false")).lower() == "true"
         if demo_mode is None
         else demo_mode
     )
